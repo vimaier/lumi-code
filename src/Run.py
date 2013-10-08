@@ -11,6 +11,14 @@ from Beam import Beam
 from Config import Config
 from Luminosity import Luminosity
 
+#TODO: structure imports in the sections python_standard_lib, 3rd_party_libs and own_modules (vimaier)
+#TODO: do not 'from x import *'
+# Actually all imports except of the own classes and OptionParser are unnecessary.
+# Probably you need 'tan' from math but this should be imported in Luminosity.
+#--vimaier
+
+#TODO: Do not 'pollute' the global space. Use main() function. See run_lumi_code.py (vimaier)
+
 
 parser = OptionParser()
 parser.add_option("-n", "--name", dest="name",

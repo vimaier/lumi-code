@@ -1,3 +1,7 @@
+#TODO: Module and class description. Eclipse will help.
+# Ask me or our wiki: https://twiki.cern.ch/twiki/bin/view/BEABP/PythonStyleGuide#Templates
+#--(vimaier)
+
 class Config:
     #parameters for class Beam
     _momeV = 0.0
@@ -35,12 +39,34 @@ class Config:
     #IBS
     _kappa=0.0
     _kappa_c = 0.0
+    #TODO: a lof of attributes. Maybe structuring in smaller classes would be sensible?
+    # --> BeamConfig, MachineConfig,
+    # -->  attributes under '#parameters for luminosity calc...' seems to be at the wrong place!?
+    #      maybe better in Luminosity?
+    #--vimaier
+
+    #TODO: write getters and if necessary setters for the attributes(vimaier)
 
 
     def __init__(self,name):
         print "Loading configuration ", name
         self.loadcommon()
-        exec("self.load"+name+"()")
+        exec("self.load"+name+"()") #TODO: Please, never ever run exec... it is a punch in the face
+                                    # of every static analysis tool :)
+                                    # Possible solution:
+                                    # def __init_config_by_name(self, config_name:
+                                    #    if "US2a" == config_name:
+                                    #       load_us2a()
+                                    #    elif "..." == config_name:
+                                    #        load_...()
+                                    #    ...
+                                    #    else:
+                                    #        raise ValueError()
+                                    #(vimaier)
+        #TODO: I would suggest a builder class ConfigBuilder where you can call the method
+        #        ConfigBuilder.create_config_from_name(name_of_config) : Config
+        # ConfigBuilder would be responsible for the correct and valid creation of a Config instance.
+        #Everything below could go into the ConfigBuilder.
         self.checkconfig()
 
 
@@ -248,5 +274,8 @@ class Config:
         if(len(self._xplane)!=self._nip):
             print "ERROR: wrong xplane definition: ",self._nip,self._xplane
         if(len(self._level_Lumi)!=self._nip):
-            print "ERROR: wrong Level_Lumi definition: ",self._nip,self._Level_lumi
+            print "ERROR: wrong Level_Lumi definition: ",self._nip,self._Level_lumi#TODO: typo
+                                                    # Static analysis shows a red circle
+                                                    #--vimaier
+
 

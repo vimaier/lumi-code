@@ -25,6 +25,7 @@ class Luminosity:
         self._max_length = config._max_length
         self._betatol = config._betatol
         self._name = name
+        #TODO: actually only name is necessary. Better: sotre Config in Beta and Beta in Luminosity
 
     def printLumiParam(self):
         print "Leveling Luminosity: ",self._level_Lumi
@@ -85,6 +86,16 @@ class Luminosity:
             if i!=1 and beam._identicalIP01:   # Trick to avoid recalculating for ip =1, which is ip5 equal to ip1, ip=0.
                 r = self.getreduc(beam,i)
                 l0 = self.getlumi0(beam,i)
+            '''TODO: Suggestion for replacing trick-condition for readability.
+            if self.__cannot_avoid_calculation(i)
+            ...
+
+            def __cannot_avoid_unnecessary_calculation(ip_number, beam).
+                """ Trick to avoid recalculating for ip =1, which is ip5 equal to ip1, ip=0. """
+                return ip_number !=1 and beam._identicalIP01
+
+            function could be used also in doFill
+            '''
             lumi.append(l0*r)
             lumi0.append(l0)
             reduc.append(r)
@@ -170,7 +181,10 @@ class Luminosity:
             #Approximation assumes perfect crabs
             geom=1.0
         else:
-            geom = np.sqrt(1+(sigs2)/(sigx2)*tan(phi/2)**2)
+            geom = np.sqrt(1+(sigs2)/(sigx2)*tan(phi/2)**2)#TODO: tan is not imported. It works
+                                                            # probably due to an import in Run.py
+                                                            # My static analysis shows an error
+                                                            #--vimaier
         return geom
 
     #Compute integrate lumi - optimum store length
@@ -288,7 +302,10 @@ class Luminosity:
         print "Reduction factor: "
         print lumiall[2]
 
-        fout = open('level_'+self._name+'.out','w')
+        fout = open('level_'+self._name+'.out','w') #TODO: I strongly advise to use a class to write TfsFiles.
+                                                    # Compare GetLLM.util.TfsFile
+                                                    # Probably I will write a class TfsFileWriter in utilities package
+                                                    #--vimaier
 
         for i in range(beam._nip):
             fout.write("@ Lp"+str(i)+" = "+str(lumiall[0][i])+"\n")
@@ -322,6 +339,7 @@ class Luminosity:
             for j in range(beam._nip):
                 if j!=1 and beam._identicalIP01:   # Trick to avoid calculating for IP5 (ip 1) since it is identical to ip=0 (IP1)
                     beta,lumitot =  self.getBetaLevel(beam,j)
+
                 if j ==0:
                     print beta
                     print lumitot[0]
@@ -352,6 +370,7 @@ class Luminosity:
 
             i=i+self._step
 
+
         if i==self._max_length:
             leveltime=i/3600.
         else:
@@ -359,6 +378,10 @@ class Luminosity:
         print leveltime,lint*1.0e-39,timeinleveling
         print >> fout,"@", self._name, intensity0, epsx0, beam._beta[0][0],beam._beta[0][1] ,lint*1e-39, leveltime, timeinleveling, maxpileupdensity
 
+        #TODO: this function does a lot. Split in several private sub methods.
+        # Also getBetaLevel
+        # Naming convention
+        # Beam is in almost used in every function --> Create attribute for beam: self.__beam = beam
 
 
 
