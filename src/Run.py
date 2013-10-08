@@ -1,16 +1,18 @@
+from math import *
+from optparse import OptionParser
+import sys
+
 from scipy.interpolate import interp1d
 from scipy.integrate import quad, dblquad, fixed_quad
 from numpy import *
 from scipy import stats
-from math import *
-from optparse import OptionParser
-import sys
+
 from Beam import Beam
 from Config import Config
 from Luminosity import Luminosity
 
 
-parser = OptionParser()                
+parser = OptionParser()
 parser.add_option("-n", "--name", dest="name",
                   help="Configuration name", default="US2")
 
