@@ -37,6 +37,7 @@ class Beam:
   _epsy0 = 0.0
   _kappa = 0.0
   _kappa_c = 0.0
+  _initsigs = 0.0
   
   def __init__(self,config):    
     self._momeV = config._momeV
@@ -47,6 +48,7 @@ class Beam:
     self._epsxn = config._epsxn
     self._epsyn = config._epsyn
     self._sigs = config._sigs
+    self._initsigs = config._sigs
     self._dpp = config._dpp
     self._beta = np.array(config._beta)
     self._betamin = np.array(config._beta)
@@ -64,11 +66,16 @@ class Beam:
     self._xplane = config._xplane  
     self._wcc = config._wcc
     self._oncc = config._oncc
+    self._lengthleveling=config._lengthleveling
+    self._constantbunchlength= config._constantbunchlength
     self._identicalIP01= (self._beta[0][0] == self._beta[1][0])*(
                      self._beta[0][1] == self._beta[1][1])*(
                      self._oncc[0] == self._oncc[1])*(
                        self._sepLR[0] == self._sepLR[1])*(
-                       self._nbunch[0] == self._nbunch[1])
+                       self._nbunch[0] == self._nbunch[1])*(
+                         self._xplane[0] == self._xplane[1])
+
+    print "IP0 and IP1 are identical?", self._identicalIP01
 
 
 

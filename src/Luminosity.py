@@ -18,6 +18,7 @@ class Luminosity:
   def __init__(self,config,name):
     self._level_Lumi = config._level_Lumi
     self._xsec = config._xsec
+    self._xsecburn = config._xsecburn
     self._days = config._days
     self._efficiency = config._efficiency
     self._turnaround = config._turnaround
@@ -30,6 +31,7 @@ class Luminosity:
     print "Leveling Luminosity: ",self._level_Lumi
     print "Beta tolerance: ",self._betatol
     print "Cross section: ",self._xsec
+    print "Cross section for Burn-off: ",self._xsecburn
     print "Days in physics: ",self._days
     print "beam efficiency: ",self._efficiency
     print "Turnaround time: ",self._turnaround
@@ -77,12 +79,11 @@ class Luminosity:
   
   #L, L0, R in all IPs
   def getlumi(self,beam):
-    nip = beam._nip
     lumi=[]
     lumi0=[]
     reduc=[]
-    for i in range(nip):
-      if i!=1 and beam._identicalIP01:   # Trick to avoid recalculating for ip =1, which is ip5 equal to ip1, ip=0.  
+    for i in range(beam._nip):
+      if i!=1 or not beam._identicalIP01:   # Trick to avoid recalculating for ip =1, which is ip5 equal to ip1, ip=0.  
         r = self.getreduc(beam,i)
         l0 = self.getlumi0(beam,i)
       lumi.append(l0*r)
@@ -132,6 +133,27 @@ class Luminosity:
     return reduc[0]
     
   #Luminous region
+
+  def getPeakLumRegion(self, beam, ip):
+    sig = beam.getsigma(ip)
+    bet = beam._beta[ip]
+    phi = beam._phi[ip]
+    xplane = beam._xplane[ip]
+    oncc = beam._oncc[ip]
+    wcc = beam._wcc
+    sigx2 = sig[xplane]**2
+    betx = bet[xplane]
+    bets = bet[1-xplane]
+    sigs2 = beam._sigs**2
+    if oncc == 1:
+      i = quad(self.integrandCC, -np.inf, np.inf, args=(0,phi,sigs2,sigx2,betx,bets,wcc))
+      norm = dblquad(self.integrandCC, -np.inf, np.inf, lambda x: -np.inf, lambda x: np.inf,   args=(phi,sigs2,sigx2,betx,bets,wcc))
+    else:
+      i = [self.integrandnoCC(0,sigs2, sigx2, phi, betx, bets),0]
+      norm = quad(self.integrandnoCC, -np.inf, np.inf,    args=(sigs2,sigx2, phi,betx,bets))
+    return i[0]/norm[0], 0.5*i[1]/norm[0]
+
+
   def getLuminousRegion(self,beam,ip):
     sig = beam.getsigma(ip)
     bet = beam._beta[ip]
@@ -157,21 +179,42 @@ class Luminosity:
     return levLumi15*self._xsec*1.0e-27/nbunch15/frev
 
 
-
-  #Reduction from crossing angle only - needed for beam-beam parameter  - apply to sigma! Take inverse for lumi
-  def getGeomFact(self,beam,ip):  
+  #  beam-beam parameter 
+  def getBBparam(self,beam,ip):
+    r0 = 1.535e-18
     sig = beam.getsigma(ip)
     phi = beam._phi[ip]
     xplane = beam._xplane[ip]
     oncc = beam._oncc[ip]
-    sigx2 = sig[xplane]**2  
-    sigs2 = beam.getsigs()**2   
+    sigx2 = sig[0]**2
+    sigy2 = sig[1]**2
+    sigs2 = beam._sigs**2  
+    sigx = sig[0]
+    sigy = sig[1]
+    bint=beam._intensity
+    bet = beam._beta[ip]
+    betax = bet[0]
+    betay = bet[1]
+    
     if(oncc==1):
       #Approximation assumes perfect crabs
-      geom=1.0
+      geomx=1.0
+      geomy=1.0
     else:
-      geom = np.sqrt(1+(sigs2)/(sigx2)*tan(phi/2)**2)     
-    return geom
+      #Approximation, neglects hour glass and CC RF curv
+      if xplane==0:
+        geomx = np.sqrt(1.+(sigs2)/(sigx2)*np.tan(phi/2.)**2)
+        geomy = 1.0
+      else:
+        geomy = np.sqrt(1.+(sigs2)/(sigy2)*np.tan(phi/2.)**2)
+        geomx = 1.0
+    
+    xi = []
+    xi.append(bint*r0*betax/(2*np.pi*beam._gamma*sigx*geomx*(sigx*geomx+sigy*geomy)))
+    xi.append(bint*r0*betay/(2*np.pi*beam._gamma*sigy*geomy*(sigx*geomx+sigy*geomy)))
+    return xi
+
+
     
   #Compute integrate lumi - optimum store length  
   def getIntlumi(self,lumi,t):
@@ -199,7 +242,7 @@ class Luminosity:
     beta = beam._beta[ip]
     bmin = beam._betamin[ip]
     xplane = beam._xplane[ip]
-    r = bmin[0]-bmin[1]
+    r = abs(bmin[0]-bmin[1])
     lumitot = self.getlumiip(beam,ip)
     
     #if current lumi smaller than levlumi and beta limit reached
@@ -208,7 +251,7 @@ class Luminosity:
       
     #first compute rough estimate (Work pretty well!!! for small time steps avoids going through the loop)
     fact = levlumi/lumitot[0]
-    if(r<1e-6):
+    if(r<1e-3):
       beta = beta/fact 
     else:
       beta[1-xplane] = beta[1-xplane]/fact**2
@@ -251,12 +294,12 @@ class Luminosity:
   def getIntensity(self,t,lumi,beam):
     rate = 0.0
     for i in range(beam._nip):
-      rate = rate + lumi[i]*self._xsec*1.0e-27/beam._nbunch[i]
+      rate = rate + lumi[i]*self._xsecburn*1.0e-27/beam._nbunch[i]
     beam._intensity = beam._intensity-t*rate
   
   #IBS and radiation damping    
   def IBS_SRgrowth(self,beam):
-    taux=((16*beam._tuneb*(beam._epsxn**2)*np.sqrt(beam._kappa)*
+    taux=((16*beam._tuneb*(beam._epsxn*beam._epsyn)*np.sqrt(beam._kappa)*
 	      np.sqrt(beam._kappa+1.)*beam._gamma*beam._sigs*beam._dpp)/
 		(2.*cst.clight*(cst.r0**2)*beam._intensity*23))/3600.
     steph = float(self._step)/3600.0
@@ -278,7 +321,9 @@ class Luminosity:
   def doFill(self,beam):
     intensity0=beam._intensity
     epsx0=beam._epsxn
-    maxpileupdensity=0
+    maxpileupdensity=0.
+    maxpeakdensity=0.
+    maxpileup=0.
     lumiall = self.getlumi(beam)
     
     print "Virtual Luminosity: "
@@ -301,7 +346,8 @@ class Luminosity:
     fout.write("xitotx"+"\t"+"xitoty"+"\t"+"Lregion"+"PileUp"+"\n")
       
     
-    
+    xix=np.zeros(beam._nip)
+    xiy=np.zeros(beam._nip)
     lumiip0 =[]
     timeinleveling=-1
     i=0
@@ -309,9 +355,17 @@ class Luminosity:
     lint = 0.0
     linttmp = 0.0000001 # small number to pass the first while evaluation
     ltot = self._days*24*3600*self._efficiency
+    xitotx=0.
+    xitoty=0.
+    xixmax=0.
+    xiymax=0.
     while (linttmp > lint and i<=int(self._max_length)):
              
       if i > 0.0:
+        if beam._sigs>0.075:
+          beam._sigs= beam._sigs*(1.+  beam._lengthleveling)
+        if beam._sigs < beam._initsigs and    beam._constantbunchlength:
+          beam._sigs = beam._initsigs  # To be done correctly we should go trough the voltage and change dpp
         lint = linttmp
 	self.getIntensity(self._step,lumiall,beam)
 	self.IBS_SRgrowth(beam)
@@ -321,8 +375,9 @@ class Luminosity:
       reducall = []
       print "Time: ",float(i)/3600.0
       for j in range(beam._nip):
-	if j!=1 and beam._identicalIP01:   # Trick to avoid calculating for IP5 (ip 1) since it is identical to ip=0 (IP1)
+	if j!=1 or not beam._identicalIP01:   # Trick to avoid calculating for IP5 (ip 1) since it is identical to ip=0 (IP1)
           beta,lumitot =  self.getBetaLevel(beam,j)
+        xix[j], xiy[j] = self.getBBparam(beam, j)
 	if j ==0:
 	  print beta
 	  print lumitot[0]
@@ -335,8 +390,13 @@ class Luminosity:
           LuminousRegion0=self.getLuminousRegion(beam, 0)
           pileup0=self.getPileUp(beam._frev,lumitot[0], beam._nbunch[0])
           pileupdensity=pileup0/LuminousRegion0[0]/1000. # event/mm
-          if pileupdensity>maxpileupdensity:
+          peakdensity=pileup0*self.getPeakLumRegion(beam, 0)[0]/1000.  #event/mm
+          if pileupdensity > maxpileupdensity:
             maxpileupdensity = pileupdensity
+          if peakdensity > maxpeakdensity:
+            maxpeakdensity = peakdensity
+          if pileup0 > maxpileup:
+            maxpileup=pileup0
           #compute temp int lumi
           if len(lumiip0)>1:
             factnow=ltot/(i+self._turnaround*3600)
@@ -345,11 +405,18 @@ class Luminosity:
           print "linttmp, lint", linttmp, lint
 	lumiall.append(lumitot[0])
 	reducall.append(lumitot[2])
-	
+
+      xitotx=sum(xix)
+      xitoty=sum(xiy)
+      if xitotx>xixmax:
+        xixmax = xitotx
+      if xitoty>xiymax:
+        xiymax = xitoty
       fout.write(str(i/3600.0)+"\t"+str(beam._intensity)+"\t"+str(beam._epsxn)+"\t"+str(beam._epsyn)+"\t"+str(beam._sigs)+"\t"+str(beam._dpp)+"\t")
       for k in range(beam._nip):
 	fout.write(str(beam._beta[k][0])+"\t"+str(beam._beta[k][1])+"\t"+str(lumiall[k])+"\t"+str(reducall[k])+"\t")
-      fout.write("xitotx"+"\t"+"xitoty"+"\t"+str(LuminousRegion0[0])+"\t"+str(pileup0)+"\t"+str(lint*1e-39)+"\n")
+      fout.write(str(xitotx)+"\t"+str(xitoty)+"\t"+str(LuminousRegion0[0])+"\t"+str(pileup0)+"\t"+str(lint*1e-39)+"\t"+str(peakdensity)+"\t")
+      fout.write(str(xix[0])+"\t"+str(xix[1])+"\t"+str(xix[2])+"\t"+str(xiy[0])+"\t"+str(xiy[1])+"\t"+str(xiy[2])+"\t"+  "\n")
                                                                        
       i=i+self._step
     
@@ -357,8 +424,8 @@ class Luminosity:
       leveltime=i/3600.
     else:
       leveltime=(i-2*self._step)/3600.
-    print leveltime,lint*1.0e-39,timeinleveling
-    print >> fout,"@", self._name, intensity0, epsx0, beam._beta[0][0],beam._beta[0][1] ,lint*1e-39, leveltime, timeinleveling, maxpileupdensity
+    print leveltime,lint*1.0e-39,timeinleveling, maxpeakdensity
+    print >> fout,"@", self._name, str(intensity0/1e11)[:4], str(epsx0*1e6)[:4], beam._beta[0][0],beam._beta[0][1] ,str(lint*1e-39)[0:5], str(leveltime)[0:3], str(timeinleveling)[0:3], str(maxpileup)[0:4], str(maxpeakdensity)[0:4], str(xixmax)[0:5], str(xiymax)[0:5], str(max(lumiip0)*1e-34)[0:5],str(beam._sigs)[0:5]
     
      
  

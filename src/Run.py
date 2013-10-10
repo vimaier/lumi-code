@@ -1,7 +1,7 @@
-from scipy.interpolate import interp1d
+#from scipy.interpolate import interp1d
 from scipy.integrate import quad, dblquad, fixed_quad
 from numpy import *
-from scipy import stats
+#from scipy import stats
 from math import *
 from optparse import OptionParser
 import sys
